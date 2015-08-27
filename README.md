@@ -1,8 +1,10 @@
 # hidemulation
 
+## hid gadget:
+
 string2hid : takes a string and "types it" using /dev/hidgX (should work on any device that offers a usb hid gadget) 
 
-usbarmory specifics:
+## usbarmory specifics:
 
 hidonly.sh : switches the usbarmory to be usb hid gadget
 
