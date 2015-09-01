@@ -122,36 +122,28 @@ int char2event(char report[8], char input)
 	return 1;
 }
 
-int main(int argc, char **argv)
+int string2hid(char *hidstr, char *device)
 {
 	char report[8];
 	int fd = -1;
 
-	if (argc <= 1) {
-		printf("syntax: %s <string> [/dev/hidgX] (\\ needs to be escaped with a \\, enter key is produced via \\n)\n", argv[0]);
-		return 0;
-	}
-
-	//printf("string >%s<\n", argv[1]);
-
 	char *filename = "/dev/hidg0";
+	if (device != NULL)
+		filename = device;
 	
-	if (argc > 2)
-		filename = argv[2];
-
 	if ((fd = open(filename, O_RDWR, 0666)) == -1) {
 		perror(filename);
 		return 3;
 	}
 
 	int i;
-	for (i = 0; i < strlen(argv[1]); i++) {
-		if (argv[1][i] == '\\') {
+	for (i = 0; i < strlen(hidstr); i++) {
+		if (hidstr[i] == '\\') {
 			i++;
-			if (argv[1][i] == 'n')
-				argv[1][i] = '\n';
+			if (hidstr[i] == 'n')
+				hidstr[i] = '\n';
 		}
-		char2event(report, argv[1][i]);
+		char2event(report, hidstr[i]);
 		//printf("%0.2x %0.2x\n", report[0], report[2]);
 		// send key
 		if (write(fd, report, 8) != 8) {
@@ -167,4 +159,25 @@ int main(int argc, char **argv)
 	}
 
 	close(fd);
+
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
+	char report[8];
+	int fd = -1;
+
+	if (argc <= 1) {
+		printf("syntax: %s <string> [/dev/hidgX] (\\ needs to be escaped with a \\, enter key is produced via \\n)\n", argv[0]);
+		return 0;
+	}
+
+	//printf("string >%s<\n", argv[1]);
+
+	char *device = NULL;
+	if (argc >= 3)
+		device = argv[2];
+
+	return string2hid(argv[1], device);
 }
