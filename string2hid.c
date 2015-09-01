@@ -163,6 +163,7 @@ int string2hid(char *hidstr, char *device)
 	return 0;
 }
 
+#ifndef NO_MAIN
 int main(int argc, char **argv)
 {
 	char report[8];
@@ -181,3 +182,4 @@ int main(int argc, char **argv)
 
 	return string2hid(argv[1], device);
 }
+#endif
