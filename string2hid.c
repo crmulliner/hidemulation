@@ -6,6 +6,7 @@
  *   
  *   note: \ needs to be escaped with \\
  *         enter key can be produced via \n
+ *         ctrl, alt, tab, backspace, esc, delete, win, shift via: c,a,t,b,e,d,g,s
  *  
  *   examples:
  *       string2hid  abc123
@@ -14,6 +15,8 @@
  *          will type ls -la (and press enter)
  *       string2hid "bla*" /dev/hidg1
  *          will type bla* using /dev/hidg1 (default is hidg0)
+ *       string2hid "\\\"\a\t\\\""
+ *	    will press alt + tab
  *
  *   Collin Mulliner (collin AT mulliner.org)
  *   http://www.mulliner.org/
