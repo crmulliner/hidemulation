@@ -1,5 +1,5 @@
 /*
- *   string 2 hid
+ *   string 2 hid event
  *
  *   program will take a string and generate HID events for each character
  *   HID events will be written to /dev/hidg0 (can be changed via argument 2)
@@ -84,66 +84,120 @@ static struct key_t keys_special[] = {
 	{.k = '`', .c = 0x35, .mod=0x00},
 	{.k = '~', .c = 0x35, .mod=0x20},
 	{.k = ' ', .c = 0x2c, .mod=0x00},
-	{.k = '\n', .c = 0x28, .mod=0x00}, // enter
+	{.k = 'n', .c = 0x28, .mod=0x00}, // enter
+	{.k = 'c', .c = 0x00, .mod=0x01}, // ctrl
+	{.k = 's', .c = 0x00, .mod=0x02}, // shift
+	{.k = 'a', .c = 0x00, .mod=0x04}, // alt
+	{.k = 'g', .c = 0x00, .mod=0x08}, // gui/win
+	{.k = 't', .c = 0x2B, .mod=0x00}, // tab
+	{.k = 'd', .c = 0x4C, .mod=0x00}, // delete
+	{.k = 'b', .c = 0x2A, .mod=0x00}, // backspace
+	{.k = 'e', .c = 0x29, .mod=0x00}, // esc
 	{.k = 0, .c = 0x00, .mod=0x00}
 };
 
-int char2event(char report[8], char input)
+int char2event(char *report, char *input_chars, int input_length)
 {
 	memset(report, 0x00, 8);
+	char input;
+	int index = 2;
+	int ic;
 
-	char lower = tolower(input);
-	if (lower >= 'a' && lower <= 'z') {
-		report[2] = lower - ('a' - 4);
-		if (lower != input) {
-			report[0] = 0x22;
-		}
-	}
-	else if (lower >= '0' && lower <= '9') {
-		report[2] = keys_num[lower - '0'].c; 
-	}
-	else {
-		int i;
-		for (i = 0; i < sizeof(keys_special); i++) {
-			if (input == keys_special[i].k) {
-				report[2] = keys_special[i].c;
-				report[0] = keys_special[i].mod;
-				break;
+	for (ic = 0; ic < input_length; ic++) {
+		input = input_chars[ic];
+		char lower = tolower(input);
+		if (lower >= 'a' && lower <= 'z') {
+			report[index] = lower - ('a' - 4);
+			index++;
+			if (lower != input) {
+				report[0] = 0x22;
 			}
-			if (keys_special[i].k == 0)
-				break;
 		}
-	}
-	if (report[2] == 0) {
-		printf("error for >%c<\n", input);
-		return 0;
+		else if (lower >= '0' && lower <= '9') {
+			report[index] = keys_num[lower - '0'].c;
+			index++;
+		}
+		else {
+			int i;
+			if (input == '\\') {
+				ic++;
+				input = input_chars[ic];
+			}
+			for (i = 0; i < sizeof(keys_special); i++) {
+				if (input == keys_special[i].k) {
+					if (keys_special[i].c != 0) {
+						report[index] = keys_special[i].c;
+					}
+					report[0] |= keys_special[i].mod;
+					index++;
+					break;
+				}
+				if (keys_special[i].k == 0)
+					break;
+			}
+		}
+		if (report[2] == 0 && report[0] == 0) {
+			printf("error for >%c<\n", input);
+			return 0;
+		}
 	}
 
 	return 1;
 }
 
-int string2hid(char *hidstr, char *device)
+int main(int argc, char **argv)
 {
 	char report[8];
 	int fd = -1;
 
+	if (argc <= 1) {
+		printf("syntax: %s <string> [/dev/hidgX] (\\ needs to be escaped with a \\, enter key is produced via \\n)\n", argv[0]);
+		return 0;
+	}
+
+	//printf("string >%s<\n", argv[1]);
+
 	char *filename = "/dev/hidg0";
-	if (device != NULL)
-		filename = device;
 	
+	if (argc > 2)
+		filename = argv[2];
+
 	if ((fd = open(filename, O_RDWR, 0666)) == -1) {
 		perror(filename);
 		return 3;
 	}
 
 	int i;
-	for (i = 0; i < strlen(hidstr); i++) {
-		if (hidstr[i] == '\\') {
+	//printf("input = %s\n", argv[1]);
+	for (i = 0; i < strlen(argv[1]); i++) {
+		if (argv[1][i] == '\\') {
 			i++;
-			if (hidstr[i] == 'n')
-				hidstr[i] = '\n';
+			if (argv[1][i] == '-') {
+				sleep(1);
+				continue;
+			}
+			else if (argv[1][i] == '"') {
+				int m = i + 1;
+				int ml = 0;
+				while (1) {
+					if (argv[1][m + ml] == '\\') {
+						printf("bs\n");
+						if (argv[1][m + ml + 1] == '"') {
+							break;
+						}
+					}
+					ml++;
+				}
+				char2event(report, &argv[1][m], ml);
+				i = i + ml + 2;
+			}
+			else {
+				char2event(report, &argv[1][i-1], 2);
+			}
 		}
-		char2event(report, hidstr[i]);
+		else {
+			char2event(report, &argv[1][i], 1);
+		}
 		//printf("%0.2x %0.2x\n", report[0], report[2]);
 		// send key
 		if (write(fd, report, 8) != 8) {
@@ -159,27 +213,4 @@ int string2hid(char *hidstr, char *device)
 	}
 
 	close(fd);
-
-	return 0;
 }
-
-#ifndef NO_MAIN
-int main(int argc, char **argv)
-{
-	char report[8];
-	int fd = -1;
-
-	if (argc <= 1) {
-		printf("syntax: %s <string> [/dev/hidgX] (\\ needs to be escaped with a \\, enter key is produced via \\n)\n", argv[0]);
-		return 0;
-	}
-
-	//printf("string >%s<\n", argv[1]);
-
-	char *device = NULL;
-	if (argc >= 3)
-		device = argv[2];
-
-	return string2hid(argv[1], device);
-}
-#endif
