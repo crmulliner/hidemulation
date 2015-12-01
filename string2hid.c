@@ -7,7 +7,11 @@
  *   note: \ needs to be escaped with \\
  *         enter key can be produced via \n
  *         ctrl, alt, tab, backspace, esc, delete, win, shift via: c,a,t,b,e,d,g,s
+ *         delay input by 1 second via \-
  *  
+ *   multiple keys at the same time:
+ *      enclose the key sequnce (upto 6) in escaped double quotes (\")
+ *
  *   examples:
  *       string2hid  abc123
  *          will type abc123
@@ -17,6 +21,9 @@
  *          will type bla* using /dev/hidg1 (default is hidg0)
  *       string2hid "\\\"\a\t\\\""
  *	    will press alt + tab
+ *       string2hid "\\\"\af\\\"\-\-test\n"
+ *          will press alt + f sleep for 2 seconds and type "test" + enter 
+ *      
  *
  *   Collin Mulliner (collin AT mulliner.org)
  *   http://www.mulliner.org/
