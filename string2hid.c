@@ -3,12 +3,12 @@
  *
  *   program will take a string and generate HID events for each character
  *   HID events will be written to /dev/hidg0 (can be changed via argument 2)
- *   
+ *
  *   note: \ needs to be escaped with \\
  *         enter key can be produced via \n
  *         ctrl, alt, tab, backspace, esc, delete, win, shift via: c,a,t,b,e,d,g,s
  *         delay input by 1 second via \-
- *  
+ *
  *   multiple keys at the same time:
  *      enclose the key sequnce (upto 6) in escaped double quotes (\")
  *
@@ -22,13 +22,17 @@
  *       string2hid "\\\"\a\t\\\""
  *	    will press alt + tab
  *       string2hid "\\\"\af\\\"\-\-test\n"
- *          will press alt + f sleep for 2 seconds and type "test" + enter 
- *      
+ *          will press alt + f sleep for 2 seconds and type "test" + enter
+ *
  *
  *   Collin Mulliner (collin AT mulliner.org)
  *   http://www.mulliner.org/
  *
  *   license: for personal use only (non commercial only)
+ *
+ *   Relevant specifications:
+ *   [0] USB Device Class Definition for Human Interface Devices
+ *   [1] USB HID Usage Tables
  *
  */
 
@@ -41,12 +45,28 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+/**
+ * Key structure. Holds a character, its HID
+ * Usage ID, and a bit field that indicates
+ * what modifier keys must be pressed to produce it.
+ *
+ * k:   ASCII character
+ * c:   corresponding HID Usage ID
+ * mod: modifier bitfield
+ *
+ * See: [0] Appendix B.1
+ */
 struct key_t {
 	char k;
 	char c;
 	char mod;
 };
 
+/**
+ * Table of key_t for digits 0-9.
+ *
+ * See: [0] Section 10
+ */
 static struct key_t keys_num[] = {
 	{.k = '0', .c = 0x27, .mod=0x00},
 	{.k = '1', .c = 0x1e, .mod=0x00},
@@ -60,6 +80,19 @@ static struct key_t keys_num[] = {
 	{.k = '9', .c = 0x26, .mod=0x00},
 };
 
+/**
+ * Table of key_t for 'special' keys. Special
+ * keys are keys that need modifiers to produce
+ * them, as well as modifier keys themselves.
+ *
+ * Uppercase alphabet characters have the same
+ * Usage ID as lowercase characters, but simply
+ * have the 'shift' bit set in the modifier byte.
+ * These are thus omitted from the table and
+ * handled programatically.
+ *
+ * See: [0] Section 10
+ */
 static struct key_t keys_special[] = {
 	{.k = '!', .c = 0x1e, .mod=0x20},
 	{.k = '@', .c = 0x1f, .mod=0x20},
@@ -106,38 +139,74 @@ static struct key_t keys_special[] = {
 	{.k = 0, .c = 0x00, .mod=0x00}
 };
 
+/**
+ * Converts an array of up to 6 characters to an HID report.
+ * The array does not necessarily have to be 6 characters long,
+ * as escapes may be 2 characters in length.
+ *
+ * Report format:
+ * Byte    0: Bit field for modifier keys (shift, alt, win, etc)
+ * Byte    1: Reserved (0x00)
+ * Bytes 2-7: usage id's of character data ()
+ *
+ * See: [0] Appendix B.1
+ *      [1] Section 10
+ *
+ * @param report the buffer to write the report to
+ * @param input_chars the characters to include in this report
+ * @param input_length the length of input_chars
+ */
 int char2event(char *report, char *input_chars, int input_length)
 {
+	// clear the report
 	memset(report, 0x00, 8);
 	char input;
+
+	// key data starts at byte 2
 	int index = 2;
 	int ic;
 
+	// fill bytes 2-7 with Usage ID's for character data
 	for (ic = 0; ic < input_length; ic++) {
 		input = input_chars[ic];
 		char lower = tolower(input);
+
+		// handle case where character is a letter
 		if (lower >= 'a' && lower <= 'z') {
+			// calculate Usage ID; ASCII lowercase letters map
+			// directly to their Usage ID's by subtracting 93.
 			report[index] = lower - ('a' - 4);
 			index++;
+			// if the character is a capital letter, set bits 1
+			// and 5 of modifier byte (for l+r shift)
 			if (lower != input) {
 				report[0] = 0x22;
 			}
 		}
+		// handle case where character is a digit
 		else if (lower >= '0' && lower <= '9') {
+			// get Usage ID from lookup table
 			report[index] = keys_num[lower - '0'].c;
 			index++;
 		}
+		// otherwise handle special characters, i.e. modifiers and
+		// escaped characters
 		else {
 			int i;
+			// if the character is \, skip it; the next character
+			// should be handled as a special in the lookup table
 			if (input == '\\') {
 				ic++;
 				input = input_chars[ic];
 			}
+			// search for character in special table
 			for (i = 0; i < sizeof(keys_special); i++) {
 				if (input == keys_special[i].k) {
 					if (keys_special[i].c != 0) {
 						report[index] = keys_special[i].c;
 					}
+					// set any bits in the modifier field
+					// needed to produce the character
 					report[0] |= keys_special[i].mod;
 					index++;
 					break;
@@ -168,7 +237,7 @@ int main(int argc, char **argv)
 	//printf("string >%s<\n", argv[1]);
 
 	char *filename = "/dev/hidg0";
-	
+
 	if (argc > 2)
 		filename = argv[2];
 
