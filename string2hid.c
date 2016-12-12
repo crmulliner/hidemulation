@@ -18,7 +18,7 @@
  *   Collin Mulliner (collin AT mulliner.org)
  *   http://www.mulliner.org/
  *
- *   license: for personal use only (non commercial only)
+ *   license: GPLv3
  *
  */
 
